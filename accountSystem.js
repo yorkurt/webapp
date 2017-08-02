@@ -1,52 +1,35 @@
 const mongoose = require('mongoose');
+const crypto = require('crypto');
 let Schema = mongoose.Schema;
-let Inventory, Checkout;
+let Accounts;
 
-
-var inventorySchema = new Schema({
-    "name": String,
-    "description": String,
-    "location": String,
-    "quantity": Number,
-    "availableQuantity": Number,
-    "tags": []
-});
-
-var checkoutSchema = new Schema({
-    "itemID": String,
-    "loanDate": Date,
-    "loanTime": Number,
-    "loanTo" : String,//name
-    "approvedBy": String//name
+var accountSchema = new Schema({
+    "username": {
+        "type": String,
+        "unique": true
+    },
+    "password": {
+        "salt": String,
+        "passwordHash": String
+    },
+    "fName": String,
+    "lName": String,
+    "email": String,
+    "teams": [],
+    "title": String,
+    "power": Number,
+    "member": Boolean
 });
 
 module.exports = function (db) {
-    Inventory = db.model("inventory", inventorySchema);
-    Checkout = db.model("checkouts", checkoutSchema);
+    Accounts = db.model("accounts", accountSchema);
 }
 
+module.exports.setDatabase = function (db) {
+    Accounts = db.model("accounts", accountSchema);
+}
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-module.exports.createUser = function (data) {
+module.exports.createAccount = function (data) {
 
     return new Promise((resolve, reject) => {
         //set password hash
@@ -56,18 +39,18 @@ module.exports.createUser = function (data) {
             "salt": salt,
             "passwordHash": saltedPass
         };
-        let newUser = new Users(data);
+        let newUser = new Accounts(data);
         newUser.save((err) => {
-            reject("Error creating user");
+            reject("Error creating account");
         });
         resolve();
     });
 }
 
-module.exports.getUsers = function () {
+module.exports.getAccounts = function () {
     return new Promise((resolve, reject) => {
-        Users.find().select({ 'password'}).exec()
-            .then(() => {
+        Accounts.find().select({ 'password': 0 }).exec()
+            .then((data) => {
                 resolve(data);
             })
             .catch((err) => {
@@ -76,9 +59,9 @@ module.exports.getUsers = function () {
     });
 }
 
-module.exports.updateUser = function (data) {
+module.exports.updateAccount = function (data) {
     return new Promise((resolve, reject) => {
-        Users.update({ "_id": data.userID }, { $set: data }, { multi: false })
+        Accounts.update({ "_id": data.userID }, { $set: data }, { multi: false })
             .then(() => {
                 resolve();
             })
@@ -88,9 +71,9 @@ module.exports.updateUser = function (data) {
     });
 }
 
-module.exports.getUserByID = function (userID) {
+module.exports.getUserByID = function (accountID) {
     return new Promise((resolve, reject) => {
-        Users.findOne({ "_id": userID }).exec()
+        Accounts.findOne({ "_id": accountID }).exec()
             .then((data) => {
                 resolve(data);
             })
@@ -100,9 +83,9 @@ module.exports.getUserByID = function (userID) {
     });
 }
 
-var getUserPassword = function (username) {
+module.exports.getUserByUsername = function (username) {
     return new Promise((resolve, reject) => {
-        Users.findOne({ "username": username }, "password").exec()
+        Accounts.findOne({ "username": username }).exec()
             .then((data) => {
                 resolve(data);
             })
@@ -112,9 +95,21 @@ var getUserPassword = function (username) {
     });
 }
 
-module.exports.removeUser = function (userID) {
+var getAccountPassword = function (username) {
     return new Promise((resolve, reject) => {
-        Users.remove({ "_id": userID }).exec()
+        Accounts.findOne({ "username": username }, "password").exec()
+            .then((data) => {
+                resolve(data);
+            })
+            .catch((err) => {
+                reject(err);
+            });
+    });
+}
+
+module.exports.removeUser = function (accID) {
+    return new Promise((resolve, reject) => {
+        Accounts.remove({ "_id": accID }).exec()
             .then((data) => {
                 resolve();
             })
@@ -124,13 +119,14 @@ module.exports.removeUser = function (userID) {
     });
 }
 
+//returns user data if password is right or it returns null
 module.exports.checkPassword = function (user, pass) {
-    this.getUserPassword(user).then((userData) => {
-        let inPass = saltPassword(pass, userData.password.salt);
-        if (inPass == userData.password.passwordHash)
-            return true;
+    this.getAccountPassword(user).then((accData) => {
+        let inPass = saltPassword(pass, accData.password.salt);
+        if (inPass === accData.password.passwordHash)
+            return accData;
         else
-            return false;
+            return null;
     })
 }
 
