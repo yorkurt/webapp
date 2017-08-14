@@ -15,11 +15,17 @@ var inventorySchema = new Schema({
 var checkoutSchema = new Schema({
     "itemID": String,
     "status": String, //Pending/Loaned/Returned/Rejected
-    "createDate": String,
+    "createDate": Date,
     "loanDate": Date,
     "loanTime": Number, //number of days
-    "loanTo" : String,//name
-    "approvedBy": String//name
+    "loanTo": {
+        "type": String,
+        "default": ""
+    },//name
+    "approvedBy": {
+        "type": String,
+        "default": ""
+    }//name
 });
 
 module.exports = function (db) {
@@ -102,7 +108,7 @@ module.exports.createCheckout = function (data) {
 
 module.exports.getCheckoutByStatus = function (statusString) {
     return new Promise((resolve, reject) => {
-        Checkout.find({"status" : statusString}).exec()
+        Checkout.find({ "status": statusString }).exec()
             .then((data) => {
                 resolve(data);
             })

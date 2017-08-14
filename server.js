@@ -1,7 +1,7 @@
 var HTTP_PORT = process.env.PORT || 8080
 
 var express = require("express");
-var accountSystem = require("./accountSystem.js");
+var auth = require("./accountSystem.js");
 var inventorySystem = require("./inventorySystem.js");
 var database = require("./database.js");
 var path = require("path");
@@ -12,7 +12,7 @@ const clientSessions = require('client-sessions');
 
 var app = express();
 app.use(bodyParser.urlencoded({ extended: true }));
-var auth, inventory;
+var inventory;
 
 
 /* 
@@ -26,23 +26,29 @@ app.use(clientSessions({
 }));
 
 app.post("/login", (req, res) => {
-    var passCheck = auth.checkPassword(req.body.username, req.body.password);
-    if (passCheck != null) {
+    auth.checkPassword(req.body.username, req.body.password).then((data) => {
+
         req.session.user = {
-            username: passCheck.username,
-            powerLevel: passCheck.powerLevel
+            username: data.username,
+            powerLevel: data.powerLevel
 
         }
         //redirect somewhere
-        app.send("Welcome " + req.session.username);
-    }
+        res.send("Welcome " + req.session.user.username);
 
-    else {
+
+    }).catch(() => {
         //redirect back to login page with error
-        app.status(403).send("403");
-    }
+        // res.status(403).send("403");
+        res.send("incorrect password");
+    });
 
 
+});
+
+app.get('/logout', function (req, res, next) {
+    req.session.reset();
+    res.redirect('/');
 });
 
 function checkLogin(accessLevel) {
@@ -79,8 +85,20 @@ function checkLoginSpecific(accessLevel) {
 */
 //user register themselves
 app.post("/register", (req, res) => {
-    let data = req.body;
+    let data = {
+        username: req.body.username,
+        password: req.body.password,
+        email: req.body.email,
+        name: req.body.name
+    };
 
+    auth.createAccount(data).then(() => {
+        res.send('Account created for' + data.name);
+
+
+    }).catch((err) => {
+        res.send(err);
+    });
     //check if containing empty fields
 });
 
@@ -88,6 +106,11 @@ app.post("/register", (req, res) => {
 app.post("/createAccount", checkLogin(100), (req, res) => {
     let data = req.body;
 
+    auth.createAccount(data).then(() => {
+        res.send('Account created for' + data.name);
+
+
+    });
     //check if containing empty fields
 });
 
@@ -112,7 +135,7 @@ app.post("/requestCheckout", checkLogin(1), (req, res) => {
 
 });
 
-//user requesting checko
+//user requesting checkout
 app.post("/checkout", checkLogin(1), (req, res) => {
     let data = req.body;
 
@@ -124,24 +147,46 @@ app.post("/updateCheckout", checkLogin(5), (req, res) => {
 
 });
 
-
-/*
-    Test Code
-*/
-app.get("/login", (req,res) =>{
-    res.sendFile(path.join(__dirname + "/login.html"))
+app.get("/user/:username", checkLogin(1), (req, res) => {
+    auth.getUserByUsername(req.params.username).then((data) => {
+        res.send(data);
+    })
 });
 
-app.get("forbidden", checkLogin(100), (req,res)=>{
+
+/*
+ *   Test Code
+ */
+app.get("/login", (req, res) => {
+    res.sendFile(path.join(__dirname + "/test pages/login.html"))
+});
+
+app.get("/forbidden", checkLogin(100), (req, res) => {
     res.send("hi");
+});
+
+app.get("/createAccount", checkLogin(100), (req, res) => {
+    res.sendFile(path.join(__dirname + "/test pages/createAccount.html"))
+});
+
+app.get("/", (req, res) => {
+    res.send("Home Page");
+});
+
+app.get("/register", (req, res) => {
+    res.sendFile(path.join(__dirname + "/test pages/register.html"))
 });
 
 app.use((req, res) => {
     res.status(404).send("Page Not Found");
 });
 
+
+/**
+ * Starting the server
+ */
 database.initialize().then(() => {
-    auth = accountSystem(database.getDatabase());
+    auth.setDatabase(database.getDatabase());
     inventory = inventorySystem(database.getDatabase());
     console.log("Server now listening to:" + HTTP_PORT);
     app.listen(HTTP_PORT);
